@@ -11,6 +11,7 @@ const EDGE_DRAW_MS = 400;
 const BOB_AMPLITUDE = 2.5;
 const BOB_PERIOD_MS = 3000;
 const ALERT_PULSE_PERIOD_MS = 1600;
+const SHARED_PULSE_PERIOD_MS = 2000;
 const ALERT_TYPES = new Set<NodeType>(["sancion", "alerta_fiscal", "alerta_disciplinaria"]);
 
 // Fase estable por nodo (a partir de su id) para que el flotado idle no se vea sincronizado.
@@ -187,10 +188,22 @@ export default function GraphCanvas() {
           const x = source.x + (target.x - source.x) * eased;
           const y = sourceBy + (targetBy - sourceBy) * eased;
 
+          const isSharedProvider = (l as unknown as StoredEdge).type === "comparte_proveedor_con";
+
           ctx.save();
-          ctx.globalAlpha = 0.25 + 0.35 * eased;
-          ctx.strokeStyle = "#54545e";
-          ctx.lineWidth = 1;
+          if (isSharedProvider) {
+            const glowT = (Math.sin((now / SHARED_PULSE_PERIOD_MS) * 2 * Math.PI) + 1) / 2;
+            ctx.globalAlpha = (0.45 + 0.35 * glowT) * (0.3 + 0.7 * eased);
+            ctx.strokeStyle = "#f5c542";
+            ctx.shadowColor = "#f5c542";
+            ctx.shadowBlur = 6;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+          } else {
+            ctx.globalAlpha = 0.25 + 0.35 * eased;
+            ctx.strokeStyle = "#54545e";
+            ctx.lineWidth = 1;
+          }
           ctx.beginPath();
           ctx.moveTo(source.x, sourceBy);
           ctx.lineTo(x, y);

@@ -29,6 +29,7 @@ interface GraphStoreState {
   hiddenTypes: Set<NodeType>;
   contractFilters: ContractFilters;
   focusRequest: { id: string; ts: number } | null;
+  storyMode: boolean;
 
   ingest: (nodes: GraphNode[], edges: GraphEdge[], mergedNodeIds?: string[]) => void;
   selectNode: (id: string | null) => void;
@@ -37,6 +38,7 @@ interface GraphStoreState {
   toggleTypeVisibility: (type: NodeType) => void;
   setContractFilters: (filters: ContractFilters) => void;
   requestFocus: (id: string) => void;
+  setStoryMode: (active: boolean) => void;
   reset: () => void;
   isRevealing: () => boolean;
 }
@@ -100,6 +102,7 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
   hiddenTypes: new Set(),
   contractFilters: {},
   focusRequest: null,
+  storyMode: false,
 
   ingest: (newNodes, newEdges, mergedNodeIds = []) => {
     if (mergedNodeIds.length > 0) {
@@ -158,6 +161,8 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
 
   requestFocus: (id) => set({ focusRequest: { id, ts: Date.now() }, selectedNodeId: id }),
 
+  setStoryMode: (active) => set({ storyMode: active }),
+
   reset: () => {
     if (revealTimer) {
       clearTimeout(revealTimer);
@@ -175,6 +180,7 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
       hiddenTypes: new Set(),
       contractFilters: {},
       focusRequest: null,
+      storyMode: false,
     });
   },
 

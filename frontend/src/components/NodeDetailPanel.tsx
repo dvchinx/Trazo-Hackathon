@@ -24,6 +24,7 @@ export default function NodeDetailPanel() {
   const markExpanded = useGraphStore((s) => s.markExpanded);
   const setStatus = useGraphStore((s) => s.setStatus);
   const allNodes = useGraphStore((s) => s.nodes);
+  const storyMode = useGraphStore((s) => s.storyMode);
 
   const [detail, setDetail] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,6 +35,15 @@ export default function NodeDetailPanel() {
     if (!node) return;
     setDetail(null);
     setError(null);
+
+    // En Modo Historia el caso es un guion precargado: el resumen ya viene embebido
+    // en el nodo y no debe depender de una llamada al backend (la gracia de este modo
+    // es funcionar aunque Croma esté caído o rate-limited).
+    if (storyMode) {
+      const raw = node.raw as { summary?: string } | null;
+      setDetail({ summary: raw?.summary ?? "Nodo de este caso del Modo Historia.", raw: node.raw });
+      return;
+    }
 
     if (node.type === "sancion" || node.type === "alerta_fiscal" || node.type === "alerta_disciplinaria") {
       setDetail({ summary: "Detalle disponible en los datos del nodo.", raw: node.raw });
@@ -46,7 +56,7 @@ export default function NodeDetailPanel() {
       .then(setDetail)
       .catch((e) => setError(e instanceof Error ? e.message : "Error cargando detalle"))
       .finally(() => setLoading(false));
-  }, [node?.id]);
+  }, [node?.id, storyMode]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -123,17 +133,28 @@ export default function NodeDetailPanel() {
 
       {detail && <p className="mb-4 text-sm leading-relaxed text-zinc-300">{detail.summary}</p>}
 
-      {EXPANDABLE.includes(node.type) && !node.expanded && (
-        <button
-          onClick={handleExpand}
-          disabled={expanding}
-          className="mb-4 w-full rounded-md bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20 disabled:opacity-50"
-        >
-          {expanding ? "Expandiendo…" : "Expandir"}
-        </button>
-      )}
-      {node.expanded && EXPANDABLE.includes(node.type) && (
-        <p className="mb-4 text-xs text-zinc-500">Este nodo ya fue expandido.</p>
+      {storyMode ? (
+        EXPANDABLE.includes(node.type) && (
+          <p className="mb-4 text-xs text-zinc-500">
+            Este nodo es parte del Modo Historia — usá "Siguiente" en el panel de abajo para continuar la
+            investigación.
+          </p>
+        )
+      ) : (
+        <>
+          {EXPANDABLE.includes(node.type) && !node.expanded && (
+            <button
+              onClick={handleExpand}
+              disabled={expanding}
+              className="mb-4 w-full rounded-md bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20 disabled:opacity-50"
+            >
+              {expanding ? "Expandiendo…" : "Expandir"}
+            </button>
+          )}
+          {node.expanded && EXPANDABLE.includes(node.type) && (
+            <p className="mb-4 text-xs text-zinc-500">Este nodo ya fue expandido.</p>
+          )}
+        </>
       )}
 
       {detail?.sourceUrl && (

@@ -20,10 +20,12 @@ export function providerContractsToGraph(
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const seenEntities = new Set<string>();
+  const entityOrder: string[] = [];
 
   for (const contract of contracts) {
     if (!seenEntities.has(contract.entity_nit)) {
       seenEntities.add(contract.entity_nit);
+      entityOrder.push(contract.entity_nit);
       nodes.push({
         id: contract.entity_nit,
         type: "entidad_estatal",
@@ -56,6 +58,21 @@ export function providerContractsToGraph(
       target: contract.contract_id,
       type: "ejecuta",
     });
+  }
+
+  // El momento "wow" de la demo: cuando este proveedor tiene contratos con más de
+  // una entidad, esas entidades quedan conectadas entre sí — es la red de
+  // contratistas recurrentes que el grafo hace visible (ver CLAUDE.md sección 4).
+  for (let i = 0; i < entityOrder.length; i++) {
+    for (let j = i + 1; j < entityOrder.length; j++) {
+      edges.push({
+        id: edgeId(entityOrder[i], entityOrder[j], "comparte_proveedor_con"),
+        source: entityOrder[i],
+        target: entityOrder[j],
+        type: "comparte_proveedor_con",
+        raw: { via_provider: providerNit, via_provider_label: providerLabel },
+      });
+    }
   }
 
   return { nodes, edges };
