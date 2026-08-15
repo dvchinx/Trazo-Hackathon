@@ -1,7 +1,13 @@
 import { create } from "zustand";
-import type { GraphNode, GraphEdge } from "@shared/types";
+import type { GraphNode, GraphEdge, NodeType } from "@shared/types";
 
 export type StoreStatus = "idle" | "loading" | "rate_limited";
+
+export interface ContractFilters {
+  minValue?: number;
+  dateFrom?: string; // YYYY-MM-DD
+  dateTo?: string; // YYYY-MM-DD
+}
 
 export interface StoredNode extends GraphNode {
   mergedAt?: number;
@@ -20,11 +26,17 @@ interface GraphStoreState {
   status: StoreStatus;
   retryAfter?: number;
   error?: string;
+  hiddenTypes: Set<NodeType>;
+  contractFilters: ContractFilters;
+  focusRequest: { id: string; ts: number } | null;
 
   ingest: (nodes: GraphNode[], edges: GraphEdge[], mergedNodeIds?: string[]) => void;
   selectNode: (id: string | null) => void;
   markExpanded: (id: string) => void;
   setStatus: (status: StoreStatus, extra?: { retryAfter?: number; error?: string }) => void;
+  toggleTypeVisibility: (type: NodeType) => void;
+  setContractFilters: (filters: ContractFilters) => void;
+  requestFocus: (id: string) => void;
   reset: () => void;
   isRevealing: () => boolean;
 }
@@ -85,6 +97,9 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
   pendingEdges: [],
   selectedNodeId: null,
   status: "idle",
+  hiddenTypes: new Set(),
+  contractFilters: {},
+  focusRequest: null,
 
   ingest: (newNodes, newEdges, mergedNodeIds = []) => {
     if (mergedNodeIds.length > 0) {
@@ -130,6 +145,19 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
   setStatus: (status, extra) =>
     set({ status, retryAfter: extra?.retryAfter, error: extra?.error }),
 
+  toggleTypeVisibility: (type) =>
+    set((s) => {
+      const hiddenTypes = new Set(s.hiddenTypes);
+      if (hiddenTypes.has(type)) hiddenTypes.delete(type);
+      else hiddenTypes.add(type);
+      return { hiddenTypes };
+    }),
+
+  setContractFilters: (filters) =>
+    set((s) => ({ contractFilters: { ...s.contractFilters, ...filters } })),
+
+  requestFocus: (id) => set({ focusRequest: { id, ts: Date.now() }, selectedNodeId: id }),
+
   reset: () => {
     if (revealTimer) {
       clearTimeout(revealTimer);
@@ -144,6 +172,9 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
       status: "idle",
       retryAfter: undefined,
       error: undefined,
+      hiddenTypes: new Set(),
+      contractFilters: {},
+      focusRequest: null,
     });
   },
 

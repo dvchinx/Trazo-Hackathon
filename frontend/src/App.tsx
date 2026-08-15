@@ -1,6 +1,7 @@
 import GraphCanvas from "./components/GraphCanvas";
 import SearchBar from "./components/SearchBar";
 import NodeDetailPanel from "./components/NodeDetailPanel";
+import FilterPanel from "./components/FilterPanel";
 import { useGraphStore } from "./store/graphStore";
 
 function DiscoveryIndicator() {
@@ -51,6 +52,7 @@ function App() {
     <div className="relative h-full w-full">
       <GraphCanvas />
       <SearchBar />
+      <FilterPanel />
       <DiscoveryIndicator />
       <RateLimitBanner />
       <NodeDetailPanel />

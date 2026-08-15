@@ -3,6 +3,7 @@ import type { ExpandRequest, ExpandResponse } from "../../../shared/types.js";
 import { MAX_NODES_PER_EXPANSION } from "../../../shared/types.js";
 import {
   secopContractsByProvider,
+  secopSanctionsByProvider,
   secopProcessesByEntity,
   secopProcess,
   CromaRateLimitError,
@@ -10,6 +11,7 @@ import {
 import {
   providerContractsToGraph,
   entityProcessesToGraph,
+  sanctionsToGraph,
   pickDiverseContracts,
   pickCandidateProcesses,
   dedupeAndCap,
@@ -35,11 +37,29 @@ router.post("/", async (req, res) => {
 
   try {
     if (nodeType === "proveedor") {
-      const response = await secopContractsByProvider(document_number);
-      const contracts = pickDiverseContracts(response.data.contracts, CONTRACT_CANDIDATE_LIMIT);
+      const [contractsResponse, sanctionsResponse] = await Promise.all([
+        secopContractsByProvider(document_number),
+        secopSanctionsByProvider(document_number),
+      ]);
+      const contracts = pickDiverseContracts(contractsResponse.data.contracts, CONTRACT_CANDIDATE_LIMIT);
       const providerLabel = contracts[0]?.provider ?? nodeId;
-      const { nodes, edges } = providerContractsToGraph(document_number, providerLabel, contracts);
-      const result = dedupeAndCap(nodes, edges, existingIds, MAX_NODES_PER_EXPANSION);
+      const { nodes: contractNodes, edges: contractEdges } = providerContractsToGraph(
+        document_number,
+        providerLabel,
+        contracts
+      );
+      const { nodes: sanctionNodes, edges: sanctionEdges } = sanctionsToGraph(
+        document_number,
+        sanctionsResponse.data.sanctions
+      );
+      // Las sanciones van primero: son pocas y valiosas, no deben perderse si el tope
+      // de nodos nuevos recorta la cola de contratos.
+      const result = dedupeAndCap(
+        [...sanctionNodes, ...contractNodes],
+        [...sanctionEdges, ...contractEdges],
+        existingIds,
+        MAX_NODES_PER_EXPANSION
+      );
       return res.json(result satisfies ExpandResponse);
     }
 

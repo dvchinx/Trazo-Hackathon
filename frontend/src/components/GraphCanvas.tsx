@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import ForceGraph2D, { type ForceGraphMethods, type NodeObject, type LinkObject } from "react-force-graph-2d";
 import { NODE_TYPE_COLOR, type NodeType } from "@shared/types";
 import { useGraphStore, type StoredNode, type StoredEdge } from "../store/graphStore";
@@ -10,6 +10,8 @@ const MERGE_PULSE_MS = 1200;
 const EDGE_DRAW_MS = 400;
 const BOB_AMPLITUDE = 2.5;
 const BOB_PERIOD_MS = 3000;
+const ALERT_PULSE_PERIOD_MS = 1600;
+const ALERT_TYPES = new Set<NodeType>(["sancion", "alerta_fiscal", "alerta_disciplinaria"]);
 
 // Fase estable por nodo (a partir de su id) para que el flotado idle no se vea sincronizado.
 function bobPhase(id: string): number {
@@ -40,16 +42,43 @@ export default function GraphCanvas() {
   const edgesMap = useGraphStore((s) => s.edges);
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const selectNode = useGraphStore((s) => s.selectNode);
+  const hiddenTypes = useGraphStore((s) => s.hiddenTypes);
+  const contractFilters = useGraphStore((s) => s.contractFilters);
+  const focusRequest = useGraphStore((s) => s.focusRequest);
 
   const fgRef = useRef<ForceGraphMethods<NodeObject<StoredNode>, LinkObject<StoredNode, StoredEdge>> | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastClickRef = useRef<{ id: string; time: number } | null>(null);
 
   const graphData = useMemo(() => {
-    const nodes = Array.from(nodesMap.values());
-    const links = Array.from(edgesMap.values()).map((e) => ({ ...e }));
+    const passesContractFilter = (n: StoredNode): boolean => {
+      if (n.type !== "contrato") return true;
+      const raw = n.raw as { value?: number | null; sign_date?: string | null } | null;
+      if (contractFilters.minValue && (raw?.value ?? 0) < contractFilters.minValue) return false;
+      if (contractFilters.dateFrom && (!raw?.sign_date || raw.sign_date < contractFilters.dateFrom)) return false;
+      if (contractFilters.dateTo && (!raw?.sign_date || raw.sign_date > contractFilters.dateTo)) return false;
+      return true;
+    };
+
+    const nodes = Array.from(nodesMap.values()).filter(
+      (n) => !hiddenTypes.has(n.type) && passesContractFilter(n)
+    );
+    const visibleIds = new Set(nodes.map((n) => n.id));
+    const links = Array.from(edgesMap.values())
+      .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
+      .map((e) => ({ ...e }));
     return { nodes, links };
-  }, [nodesMap, edgesMap]);
+  }, [nodesMap, edgesMap, hiddenTypes, contractFilters]);
+
+  useEffect(() => {
+    if (!focusRequest || !fgRef.current) return;
+    const node = graphData.nodes.find((n) => n.id === focusRequest.id) as
+      | (NodeObject<StoredNode> & { x?: number; y?: number })
+      | undefined;
+    if (!node || node.x === undefined || node.y === undefined) return;
+    fgRef.current.centerAt(node.x, node.y, 600);
+    fgRef.current.zoom(3, 600);
+  }, [focusRequest, graphData.nodes]);
 
   return (
     <div ref={containerRef} className="h-full w-full bg-[#0d0d0f]">
@@ -88,6 +117,9 @@ export default function GraphCanvas() {
           const isSelected = n.id === selectedNodeId;
 
           const mergePulse = n.mergedAt ? 1 - Math.min(1, (now - n.mergedAt) / MERGE_PULSE_MS) : 0;
+          const alertPulse = ALERT_TYPES.has(n.type)
+            ? (Math.sin((now / ALERT_PULSE_PERIOD_MS) * 2 * Math.PI) + 1) / 2
+            : 0;
 
           ctx.save();
           ctx.globalAlpha = 0.3 + 0.7 * scale;
@@ -102,8 +134,18 @@ export default function GraphCanvas() {
             ctx.globalAlpha = 0.3 + 0.7 * scale;
           }
 
+          if (alertPulse > 0) {
+            ctx.beginPath();
+            ctx.arc(n.x, by, radius + 2 + alertPulse * 5, 0, 2 * Math.PI);
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = (0.15 + 0.35 * alertPulse) * (0.3 + 0.7 * scale);
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.globalAlpha = 0.3 + 0.7 * scale;
+          }
+
           ctx.shadowColor = color;
-          ctx.shadowBlur = isSelected ? 22 : 10;
+          ctx.shadowBlur = isSelected ? 22 : 10 + alertPulse * 8;
           ctx.beginPath();
           ctx.arc(n.x, by, radius, 0, 2 * Math.PI);
           ctx.fillStyle = color;
