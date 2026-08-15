@@ -16,6 +16,46 @@ const NODE_TYPE_LABEL: Record<NodeType, string> = {
 
 const EXPANDABLE: NodeType[] = ["entidad_estatal", "proveedor"];
 
+function formatCOP(value: number | null | undefined): string {
+  if (!value) return "valor no reportado";
+  return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(
+    value
+  );
+}
+
+/** Resumen en lenguaje natural para nodos cuyo detalle ya viene embebido (no requieren
+ * una llamada extra al backend): sanciones y alertas fiscales/disciplinarias. */
+function localSummaryFor(node: { type: NodeType; raw: unknown }): string {
+  if (node.type === "sancion") {
+    const s = node.raw as {
+      sanctioning_entity?: string | null;
+      resolution_number?: string | null;
+      value?: number | null;
+      published_date?: string | null;
+    } | null;
+    const parts = [
+      s?.resolution_number ? `Sanción ${s.resolution_number}` : "Sanción",
+      s?.sanctioning_entity ? `impuesta por ${s.sanctioning_entity}` : null,
+      `por ${formatCOP(s?.value)}`,
+      s?.published_date ? `(publicada ${s.published_date})` : null,
+    ].filter(Boolean);
+    return `${parts.join(" ")}.`;
+  }
+
+  if (node.type === "alerta_fiscal") {
+    const r = node.raw as { status?: string } | null;
+    return r?.status ?? "Responsabilidad fiscal reportada en el Boletín de Responsables Fiscales (Contraloría).";
+  }
+
+  if (node.type === "alerta_disciplinaria") {
+    const r = node.raw as { records?: { category?: string }[] } | null;
+    const categories = r?.records?.map((rec) => rec.category).filter(Boolean).join(", ");
+    return `Antecedentes registrados en la Procuraduría (SIRI)${categories ? `: ${categories}` : ""}.`;
+  }
+
+  return "Detalle disponible en los datos del nodo.";
+}
+
 export default function NodeDetailPanel() {
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const node = useGraphStore((s) => (selectedNodeId ? s.nodes.get(selectedNodeId) : undefined));
@@ -46,7 +86,7 @@ export default function NodeDetailPanel() {
     }
 
     if (node.type === "sancion" || node.type === "alerta_fiscal" || node.type === "alerta_disciplinaria") {
-      setDetail({ summary: "Detalle disponible en los datos del nodo.", raw: node.raw });
+      setDetail({ summary: localSummaryFor(node), raw: node.raw });
       return;
     }
 

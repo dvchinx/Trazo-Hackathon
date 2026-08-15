@@ -6,12 +6,17 @@ import {
   secopSanctionsByProvider,
   secopProcessesByEntity,
   secopProcess,
+  ruesEntityByNit,
+  procuraduriaDisciplinaryRecords,
+  contraloriaFiscalRecords,
   CromaRateLimitError,
 } from "../services/data-source.js";
 import {
   providerContractsToGraph,
   entityProcessesToGraph,
   sanctionsToGraph,
+  fiscalAlertToGraph,
+  disciplinaryAlertToGraph,
   pickDiverseContracts,
   pickCandidateProcesses,
   dedupeAndCap,
@@ -37,12 +42,14 @@ router.post("/", async (req, res) => {
 
   try {
     if (nodeType === "proveedor") {
-      const [contractsResponse, sanctionsResponse] = await Promise.all([
+      const [contractsResponse, sanctionsResponse, registryResponse, disciplinaryResponse] = await Promise.all([
         secopContractsByProvider(document_number),
         secopSanctionsByProvider(document_number),
+        ruesEntityByNit(document_number),
+        procuraduriaDisciplinaryRecords(document_number, "NIT"),
       ]);
       const contracts = pickDiverseContracts(contractsResponse.data.contracts, CONTRACT_CANDIDATE_LIMIT);
-      const providerLabel = contracts[0]?.provider ?? nodeId;
+      const providerLabel = contracts[0]?.provider ?? registryResponse.data.entity?.name ?? nodeId;
       const { nodes: contractNodes, edges: contractEdges } = providerContractsToGraph(
         document_number,
         providerLabel,
@@ -52,11 +59,30 @@ router.post("/", async (req, res) => {
         document_number,
         sanctionsResponse.data.sanctions
       );
-      // Las sanciones van primero: son pocas y valiosas, no deben perderse si el tope
+      const { nodes: disciplinaryNodes, edges: disciplinaryEdges } = disciplinaryAlertToGraph(
+        document_number,
+        disciplinaryResponse.data
+      );
+
+      // La responsabilidad fiscal (Contraloría) se consulta por persona, no por NIT — solo
+      // se dispara si RUES nos dio un representante legal identificado para este proveedor.
+      let fiscalNodes: typeof sanctionNodes = [];
+      let fiscalEdges: typeof sanctionEdges = [];
+      const legalRep = registryResponse.data.related_parties?.find((p) => /representante legal/i.test(p.role));
+      if (legalRep) {
+        const fiscalResponse = await contraloriaFiscalRecords(legalRep.document_number, "CC");
+        ({ nodes: fiscalNodes, edges: fiscalEdges } = fiscalAlertToGraph(
+          document_number,
+          legalRep.name,
+          fiscalResponse.data
+        ));
+      }
+
+      // Las alertas van primero: son pocas y valiosas, no deben perderse si el tope
       // de nodos nuevos recorta la cola de contratos.
       const result = dedupeAndCap(
-        [...sanctionNodes, ...contractNodes],
-        [...sanctionEdges, ...contractEdges],
+        [...sanctionNodes, ...disciplinaryNodes, ...fiscalNodes, ...contractNodes],
+        [...sanctionEdges, ...disciplinaryEdges, ...fiscalEdges, ...contractEdges],
         existingIds,
         MAX_NODES_PER_EXPANSION
       );

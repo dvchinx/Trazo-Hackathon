@@ -6,6 +6,8 @@ import {
   secopSanctionsByProvider,
   secopProcessesByEntity,
   secopContract,
+  procuraduriaDisciplinaryRecords,
+  contraloriaFiscalRecords,
   CromaRateLimitError,
 } from "../services/data-source.js";
 
@@ -23,11 +25,15 @@ router.post("/:nodeId", async (req, res) => {
 
   try {
     if (nodeType === "proveedor") {
-      const [registry, contracts, sanctions] = await Promise.all([
+      const [registry, contracts, sanctions, disciplinary] = await Promise.all([
         ruesEntityByNit(document_number),
         secopContractsByProvider(document_number),
         secopSanctionsByProvider(document_number),
+        procuraduriaDisciplinaryRecords(document_number, "NIT"),
       ]);
+
+      const legalRep = registry.data.related_parties?.find((p) => /representante legal/i.test(p.role));
+      const fiscal = legalRep ? await contraloriaFiscalRecords(legalRep.document_number, "CC") : null;
 
       const distinctEntities = new Set(contracts.data.contracts.map((c) => c.entity_nit)).size;
       const totalValue = contracts.data.contracts.reduce((sum, c) => sum + (c.value ?? 0), 0);
@@ -41,11 +47,19 @@ router.post("/:nodeId", async (req, res) => {
         sanctions.data.count > 0
           ? `Tiene ${sanctions.data.count} sanción(es) registrada(s) como contratista del Estado.`
           : "No tiene sanciones registradas como contratista del Estado.",
-      ].join(" ");
+        disciplinary.data.has_records
+          ? "Tiene antecedentes disciplinarios registrados en la Procuraduría."
+          : "No tiene antecedentes disciplinarios registrados en la Procuraduría.",
+        fiscal?.data.is_fiscal_responsible
+          ? `Su representante legal (${legalRep!.name}) figura como responsable fiscal ante la Contraloría.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
 
       return res.json({
         summary,
-        raw: { registry: registry.data, sanctions: sanctions.data },
+        raw: { registry: registry.data, sanctions: sanctions.data, disciplinary: disciplinary.data, fiscal: fiscal?.data ?? null },
         sourceUrl: contracts.data.contracts[0]?.url ?? undefined,
       } satisfies DetailResponse);
     }

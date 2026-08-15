@@ -178,3 +178,40 @@ export interface SecopContractResponse {
   policies?: unknown[];
   delivery_plan?: unknown;
 }
+
+export interface ContraloriaFiscalRecordResponse {
+  found: boolean;
+  document_type: string;
+  document_type_label: string;
+  document_number: string;
+  is_fiscal_responsible: boolean;
+  verification_code: string | null;
+  certified_at: string | null;
+  status: string;
+  message: string;
+}
+
+export interface ProcuraduriaRecordTable {
+  heading: string;
+  columns: string[];
+  rows: string[][];
+}
+
+export interface ProcuraduriaRecord {
+  category: string;
+  siri: string | null;
+  tables: ProcuraduriaRecordTable[];
+}
+
+export interface ProcuraduriaDisciplinaryRecordResponse {
+  found: boolean;
+  document_type: string;
+  document_type_label: string;
+  document_number: string;
+  full_name: string | null;
+  has_records: boolean;
+  status: string;
+  message: string;
+  records: ProcuraduriaRecord[];
+  checked_at: string | null;
+}

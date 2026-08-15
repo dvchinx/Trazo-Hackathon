@@ -8,6 +8,8 @@ import type {
   SecopSanctionsByProviderResponse,
   SecopProcessResponse,
   SecopContractResponse,
+  ContraloriaFiscalRecordResponse,
+  ProcuraduriaDisciplinaryRecordResponse,
 } from "./croma-types.js";
 
 export class CromaRateLimitError extends Error {
@@ -122,4 +124,18 @@ export function secopProcess(notice_uid: string) {
 
 export function secopContract(contract_id: string) {
   return post<{ data: SecopContractResponse }>("/co/secop/contract/v1", { contract_id });
+}
+
+export function contraloriaFiscalRecords(document_number: string, document_type = "CC") {
+  return post<{ data: ContraloriaFiscalRecordResponse }>("/co/contraloria/fiscal-records/v1", {
+    document_number,
+    document_type,
+  });
+}
+
+export function procuraduriaDisciplinaryRecords(document_number: string, document_type = "CC") {
+  return post<{ data: ProcuraduriaDisciplinaryRecordResponse }>("/co/procuraduria/disciplinary-records/v1", {
+    document_number,
+    document_type,
+  });
 }

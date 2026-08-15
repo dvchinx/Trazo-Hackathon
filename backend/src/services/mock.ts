@@ -6,6 +6,9 @@ import {
   MOCK_ENTITIES,
   MOCK_PROVIDERS,
   MOCK_SANCTIONS,
+  MOCK_LEGAL_REPS,
+  MOCK_FISCAL_RESPONSIBLE,
+  MOCK_DISCIPLINARY_RECORDS,
   contractsByProvider,
   contractsByEntity,
   seedsByEntity,
@@ -22,6 +25,8 @@ import type {
   SecopProcessResponse,
   SecopContractResponse,
   SecopProcessSummary,
+  ContraloriaFiscalRecordResponse,
+  ProcuraduriaDisciplinaryRecordResponse,
 } from "./croma-types.js";
 
 // Pequeña latencia simulada para que el revelado escalonado del frontend se sienta natural.
@@ -48,6 +53,7 @@ export function ruesEntityByNit(document_number: string): Promise<{ data: RuesEn
     return delay({ data: { found: false, document_number, entity: undefined } });
   }
   const summary = ruesSummaryForProvider(provider);
+  const legalRep = MOCK_LEGAL_REPS[document_number];
   return delay({
     data: {
       found: true,
@@ -55,7 +61,7 @@ export function ruesEntityByNit(document_number: string): Promise<{ data: RuesEn
       entity: summary.detail,
       financials: [],
       renewals: [],
-      related_parties: [],
+      related_parties: legalRep ? [legalRep] : [],
       notices: [],
     },
   });
@@ -179,5 +185,51 @@ export function secopContract(contract_id: string): Promise<{ data: SecopContrac
   }
   return delay({
     data: { found: true, contract_id, contract, modifications: [], policies: [], delivery_plan: null },
+  });
+}
+
+export function contraloriaFiscalRecords(
+  document_number: string,
+  document_type = "CC"
+): Promise<{ data: ContraloriaFiscalRecordResponse }> {
+  const isResponsible = MOCK_FISCAL_RESPONSIBLE[document_number] === true;
+  return delay({
+    data: {
+      found: true,
+      document_type,
+      document_type_label: document_type === "CC" ? "Cédula de Ciudadanía" : document_type,
+      document_number,
+      is_fiscal_responsible: isResponsible,
+      verification_code: isResponsible ? `${document_number}-MOCK` : null,
+      certified_at: new Date().toISOString(),
+      status: isResponsible
+        ? "SE ENCUENTRA REPORTADO COMO RESPONSABLE FISCAL (dato simulado)."
+        : "NO SE ENCUENTRA REPORTADO COMO RESPONSABLE FISCAL.",
+      message: "Certificado simulado — modo mock, no proviene de la Contraloría real.",
+    },
+  });
+}
+
+export function procuraduriaDisciplinaryRecords(
+  document_number: string,
+  document_type = "CC"
+): Promise<{ data: ProcuraduriaDisciplinaryRecordResponse }> {
+  const records = MOCK_DISCIPLINARY_RECORDS[document_number] ?? [];
+  return delay({
+    data: {
+      found: records.length > 0,
+      document_type,
+      document_type_label: document_type === "NIT" ? "Nit" : document_type,
+      document_number,
+      full_name: null,
+      has_records: records.length > 0,
+      status:
+        records.length > 0
+          ? "SE ENCONTRARON ANTECEDENTES (dato simulado)."
+          : "NO SE ENCONTRARON ANTECEDENTES.",
+      message: "Certificado simulado — modo mock, no proviene de la Procuraduría real.",
+      records: records.map((r) => ({ category: r.category, siri: null, tables: [] })),
+      checked_at: new Date().toISOString(),
+    },
   });
 }

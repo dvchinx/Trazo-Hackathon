@@ -5,6 +5,8 @@ import type {
   SecopProcessResponse,
   SecopSanction,
   RuesEntitySummary,
+  ContraloriaFiscalRecordResponse,
+  ProcuraduriaDisciplinaryRecordResponse,
 } from "../services/croma-types.js";
 
 function edgeId(source: string, target: string, type: GraphEdge["type"]): string {
@@ -188,6 +190,57 @@ export function sanctionsToGraph(
   });
 
   return { nodes, edges };
+}
+
+/** Contraloría (SIBOR): responsabilidad fiscal del representante legal del proveedor.
+ * No hay tipo de nodo "persona" en el modelo (ver CLAUDE.md sección 9) — la alerta
+ * cuelga directo del proveedor, con el nombre de la persona como contexto en el label. */
+export function fiscalAlertToGraph(
+  providerNit: string,
+  legalRepName: string,
+  record: ContraloriaFiscalRecordResponse
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  if (!record.is_fiscal_responsible) return { nodes: [], edges: [] };
+
+  const id = `alerta_fiscal:${providerNit}`;
+  return {
+    nodes: [
+      {
+        id,
+        type: "alerta_fiscal",
+        label: `Responsabilidad fiscal — ${legalRepName}`,
+        raw: record,
+        discovered_at: 0,
+        expanded: true,
+      },
+    ],
+    edges: [{ id: edgeId(providerNit, id, "tiene_alerta"), source: providerNit, target: id, type: "tiene_alerta" }],
+  };
+}
+
+/** Procuraduría (SIRI): antecedentes disciplinarios/penales/contractuales del proveedor,
+ * consultados directamente por su NIT. */
+export function disciplinaryAlertToGraph(
+  providerNit: string,
+  record: ProcuraduriaDisciplinaryRecordResponse
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  if (!record.has_records) return { nodes: [], edges: [] };
+
+  const id = `alerta_disciplinaria:${providerNit}`;
+  const categories = record.records.map((r) => r.category).join(", ");
+  return {
+    nodes: [
+      {
+        id,
+        type: "alerta_disciplinaria",
+        label: categories ? `Antecedente: ${categories}` : "Antecedente disciplinario",
+        raw: record,
+        discovered_at: 0,
+        expanded: true,
+      },
+    ],
+    edges: [{ id: edgeId(providerNit, id, "tiene_alerta"), source: providerNit, target: id, type: "tiene_alerta" }],
+  };
 }
 
 export function ruesSummaryToCandidate(entity: RuesEntitySummary) {

@@ -209,6 +209,27 @@ export const MOCK_SANCTIONS: Record<string, SecopSanction[]> = {
   ],
 };
 
+// Representante legal simulado — solo para CONSTRUCTORA HORIZONTE, así el flujo de
+// alerta_fiscal (que depende de resolver primero el representante legal vía RUES)
+// tiene un caso positivo para demostrar en modo mock.
+export const MOCK_LEGAL_REPS: Record<string, { document_number: string; name: string; role: string }> = {
+  "900111222": {
+    document_number: "1017654321",
+    name: "CARLOS ANDRÉS MEJÍA RESTREPO",
+    role: "Representante Legal - Principal",
+  },
+};
+
+// Responsabilidad fiscal (Contraloría), indexada por documento de la persona, no del NIT.
+export const MOCK_FISCAL_RESPONSIBLE: Record<string, boolean> = {
+  "1017654321": true, // representante legal de CONSTRUCTORA HORIZONTE
+};
+
+// Antecedentes disciplinarios (Procuraduría), indexados por NIT del proveedor.
+export const MOCK_DISCIPLINARY_RECORDS: Record<string, { category: string }[]> = {
+  "900333444": [{ category: "Disciplinario" }], // TECNO INSUMOS: además de la sanción SECOP
+};
+
 export function ruesSummaryForProvider(p: MockProvider): RuesEntitySummary {
   const detail: RuesEntityDetail = {
     registry_id: `mock-${p.nit}`,

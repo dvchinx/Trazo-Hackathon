@@ -19,5 +19,7 @@ export const secopContractsByProvider = impl.secopContractsByProvider;
 export const secopSanctionsByProvider = impl.secopSanctionsByProvider;
 export const secopProcess = impl.secopProcess;
 export const secopContract = impl.secopContract;
+export const contraloriaFiscalRecords = impl.contraloriaFiscalRecords;
+export const procuraduriaDisciplinaryRecords = impl.procuraduriaDisciplinaryRecords;
 
 export { CromaRateLimitError } from "./croma.js";
