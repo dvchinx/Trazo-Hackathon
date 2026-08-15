@@ -24,8 +24,29 @@ import {
 
 const PROCESS_CANDIDATE_LIMIT = 8;
 const CONTRACT_CANDIDATE_LIMIT = 12;
+const PROCESS_DETAIL_CONCURRENCY = 4;
 
 const router = Router();
+
+/** Resuelve `items` en lotes de tamaño `limit` en vez de todos a la vez — demasiadas
+ * requests concurrentes contra Croma son justo lo que dispara ECONNRESET. Además, si un
+ * ítem falla incluso después de los reintentos de `post()`, se omite en vez de tumbar
+ * toda la expansión (mejor un proceso menos que un 502 completo). */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit);
+    const settled = await Promise.allSettled(batch.map(fn));
+    for (const outcome of settled) {
+      if (outcome.status === "fulfilled") {
+        results.push(outcome.value);
+      } else {
+        console.warn("[expand] se omitió un proceso tras fallo persistente:", outcome.reason);
+      }
+    }
+  }
+  return results;
+}
 
 router.post("/", async (req, res) => {
   const { nodeId, nodeType, document_number, existingProviderNits, existingEntityNits } =
@@ -97,8 +118,8 @@ router.post("/", async (req, res) => {
       });
       const candidates = pickCandidateProcesses(listResponse.data.processes, PROCESS_CANDIDATE_LIMIT);
 
-      const details = await Promise.all(
-        candidates.map((c) => secopProcess(c.notice_uid as string).then((r) => r.data))
+      const details = await mapWithConcurrency(candidates, PROCESS_DETAIL_CONCURRENCY, (c) =>
+        secopProcess(c.notice_uid as string).then((r) => r.data)
       );
 
       const { nodes, edges } = entityProcessesToGraph(document_number, details);

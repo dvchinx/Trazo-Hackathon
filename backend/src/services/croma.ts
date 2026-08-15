@@ -49,6 +49,15 @@ function getClient(): AxiosInstance {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Errores de socket/red transitorios (p. ej. Croma cerrando una conexión keep-alive justo
+// cuando axios la reutiliza) — no tienen response, así que no son un 429 pero tampoco deben
+// tumbar la request de una: vale la pena un par de reintentos cortos antes de rendirse.
+const RETRYABLE_NETWORK_CODES = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNABORTED", "ECONNREFUSED", "EPIPE"]);
+
+function isRetryableNetworkError(error: unknown): boolean {
+  return isAxiosError(error) && !error.response && !!error.code && RETRYABLE_NETWORK_CODES.has(error.code);
+}
+
 async function post<T>(path: string, body: Record<string, unknown>): Promise<T> {
   const cacheKey = `${path}:${JSON.stringify(body)}`;
   const cached = cache.get(cacheKey);
@@ -72,6 +81,10 @@ async function post<T>(path: string, body: Record<string, unknown>): Promise<T> 
           continue;
         }
         throw new CromaRateLimitError(retryAfter);
+      }
+      if (isRetryableNetworkError(error) && attempt < maxAttempts - 1) {
+        await sleep(300 * 2 ** attempt);
+        continue;
       }
       throw error;
     }
