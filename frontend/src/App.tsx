@@ -3,6 +3,7 @@ import SearchBar from "./components/SearchBar";
 import NodeDetailPanel from "./components/NodeDetailPanel";
 import FilterPanel from "./components/FilterPanel";
 import StoryMode from "./components/StoryMode";
+import NotesPanel from "./components/NotesPanel";
 import { useGraphStore } from "./store/graphStore";
 
 function DiscoveryIndicator() {
@@ -54,6 +55,7 @@ function App() {
       <GraphCanvas />
       <SearchBar />
       <FilterPanel />
+      <NotesPanel />
       <DiscoveryIndicator />
       <RateLimitBanner />
       <StoryMode />
