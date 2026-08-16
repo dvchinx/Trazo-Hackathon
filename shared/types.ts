@@ -82,6 +82,62 @@ export interface RateLimitedResponse {
   retry_after: number; // segundos
 }
 
+// Fase 5 — Investigación colaborativa asíncrona (CLAUDE.md sección 8, confirmada
+// explícitamente por el equipo antes de implementarse). Una "sala de investigación"
+// persiste el grafo de un caso en el backend bajo un case_id, para que el link se
+// pueda compartir con estado acumulado y no arranque desde cero cada vez.
+
+export interface CaseNodeMeta {
+  discovered_by: string;
+  discovered_at: string; // ISO, generado por el servidor — no confiar en el cliente
+}
+
+export interface CaseNote {
+  id: string;
+  nodeId: string;
+  text: string;
+  author: string;
+  created_at: string; // ISO
+}
+
+export interface CaseSnapshot {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  nodeMeta: Record<string, CaseNodeMeta>;
+  notes: CaseNote[];
+}
+
+export interface CreateCaseRequest {
+  title: string;
+  author: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface AddCaseItemsRequest {
+  author: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface AddCaseNoteRequest {
+  nodeId: string;
+  text: string;
+  author: string;
+}
+
+export interface CaseResponse {
+  case: CaseSnapshot;
+}
+
+export interface CaseNoteResponse {
+  note: CaseNote;
+}
+
 export const NODE_TYPE_COLOR: Record<NodeType, string> = {
   entidad_estatal: "#3b82f6", // azul
   proveedor: "#22c55e", // verde

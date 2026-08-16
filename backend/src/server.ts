@@ -4,6 +4,7 @@ import cors from "cors";
 import searchRouter from "./routes/search.js";
 import expandRouter from "./routes/expand.js";
 import detailRouter from "./routes/detail.js";
+import casesRouter from "./routes/cases.js";
 import { USE_MOCK_DATA } from "./services/data-source.js";
 
 const app = express();
@@ -18,6 +19,7 @@ app.get("/api/health", (_req, res) =>
 app.use("/api/search", searchRouter);
 app.use("/api/expand", expandRouter);
 app.use("/api/detail", detailRouter);
+app.use("/api/cases", casesRouter);
 
 app.listen(PORT, () => {
   console.log(`[trazo-backend] escuchando en http://localhost:${PORT}`);

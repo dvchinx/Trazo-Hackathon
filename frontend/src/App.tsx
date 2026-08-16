@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import GraphCanvas from "./components/GraphCanvas";
 import SearchBar from "./components/SearchBar";
 import NodeDetailPanel from "./components/NodeDetailPanel";
 import FilterPanel from "./components/FilterPanel";
 import StoryMode from "./components/StoryMode";
 import NotesPanel from "./components/NotesPanel";
+import CaseControls from "./components/CaseControls";
 import { useGraphStore } from "./store/graphStore";
-import { buildShareUrl, readGraphFromLocation } from "./lib/shareGraph";
+import { readGraphFromLocation } from "./lib/shareGraph";
+import * as api from "./api/client";
+
+const CASE_POLL_MS = 7000;
 
 function DiscoveryIndicator() {
   const nodesCount = useGraphStore((s) => s.nodes.size);
@@ -51,47 +55,42 @@ function RateLimitBanner() {
   );
 }
 
-function ShareButton() {
-  const nodesMap = useGraphStore((s) => s.nodes);
-  const edgesMap = useGraphStore((s) => s.edges);
-  const storyMode = useGraphStore((s) => s.storyMode);
-  const isRevealing = useGraphStore((s) => s.isRevealing());
-  const [copied, setCopied] = useState(false);
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  if (nodesMap.size === 0 || storyMode || isRevealing) return null;
-
-  async function handleShare() {
-    const url = buildShareUrl(Array.from(nodesMap.values()), Array.from(edgesMap.values()));
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      window.prompt("Copiá el link para compartir este grafo:", url);
-      return;
-    }
-    setCopied(true);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
-  }
-
-  return (
-    <button
-      onClick={handleShare}
-      className="pointer-events-auto absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-white/10 bg-[#131318]/90 px-3 py-1.5 text-xs text-zinc-300 shadow-lg backdrop-blur transition hover:bg-white/10"
-    >
-      {copied ? "Link copiado ✓" : "🔗 Compartir grafo"}
-    </button>
-  );
-}
-
 function App() {
   const ingest = useGraphStore((s) => s.ingest);
+  const hydrateCase = useGraphStore((s) => s.hydrateCase);
+  const mergeCaseUpdate = useGraphStore((s) => s.mergeCaseUpdate);
+  const caseId = useGraphStore((s) => s.caseId);
 
+  // Al montar: si la URL trae ?case=<id> (sala de investigación persistida), la carga
+  // desde el backend. Si no, cae al link efímero #g=... (compartir sin backend).
   useEffect(() => {
+    const caseParam = new URLSearchParams(window.location.search).get("case");
+    if (caseParam) {
+      api
+        .getCase(caseParam)
+        .then(({ case: snapshot }) => hydrateCase(snapshot))
+        .catch(() => {
+          const shared = readGraphFromLocation();
+          if (shared) ingest(shared.nodes, shared.edges);
+        });
+      return;
+    }
     const shared = readGraphFromLocation();
     if (shared) ingest(shared.nodes, shared.edges);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sincronización simple por polling (Fase 5: no WebSockets) mientras haya una sala activa.
+  useEffect(() => {
+    if (!caseId) return;
+    const interval = setInterval(() => {
+      api
+        .getCase(caseId)
+        .then(({ case: snapshot }) => mergeCaseUpdate(snapshot))
+        .catch(() => {});
+    }, CASE_POLL_MS);
+    return () => clearInterval(interval);
+  }, [caseId, mergeCaseUpdate]);
 
   return (
     <div className="relative h-full w-full">
@@ -102,7 +101,7 @@ function App() {
       <DiscoveryIndicator />
       <RateLimitBanner />
       <StoryMode />
-      <ShareButton />
+      <CaseControls />
       <NodeDetailPanel />
     </div>
   );
