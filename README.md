@@ -1,5 +1,9 @@
 # Trazo
 
+## Acceso:
+user: trazo
+pass: dwhg26h7E4Tz
+
 **Mapa interactivo de contratación pública en Colombia.** Un grafo estilo Obsidian que revela en vivo cómo se mueve la plata del Estado: entidades, proveedores, contratos y sanciones, conectados como nodos que aparecen y se exploran a medida que investigas.
 
 Colombia publica datos abiertos de contratación (SECOP), registro empresarial (RUES), sanciones fiscales (Contraloría) y disciplinarias (Procuraduría) — pero en portales separados, sin relación visible entre sí. Trazo los unifica: buscas una entidad o un proveedor, y el grafo va revelando con quién contrata, qué sanciones tiene, y qué otras entidades tocan esos mismos actores.
