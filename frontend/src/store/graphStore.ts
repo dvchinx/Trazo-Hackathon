@@ -168,6 +168,11 @@ export const useGraphStore = create<GraphStoreState>((set, get) => ({
       clearTimeout(revealTimer);
       revealTimer = null;
     }
+    // Un link "compartido" apunta a una foto puntual del grafo — si el usuario arranca
+    // una investigación nueva, ese link ya no describe lo que está en pantalla.
+    if (window.location.hash) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
     set({
       nodes: new Map(),
       edges: new Map(),
