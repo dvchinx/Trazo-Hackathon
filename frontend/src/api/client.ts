@@ -12,6 +12,7 @@ import type {
   CaseResponse,
   CaseNoteResponse,
 } from "@shared/types";
+import { useAuthStore, encodeCredentials } from "../store/authStore";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
@@ -24,12 +25,33 @@ export class RateLimitedError extends Error {
   }
 }
 
+export class UnauthorizedError extends Error {
+  constructor() {
+    super("No autorizado");
+    this.name = "UnauthorizedError";
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = useAuthStore.getState().token;
+  return token ? { Authorization: `Basic ${token}` } : {};
+}
+
+function handleUnauthorized(response: Response): void {
+  if (response.status === 401) {
+    useAuthStore.getState().clear();
+    throw new UnauthorizedError();
+  }
+}
+
 async function post<TResponse>(path: string, body: unknown): Promise<TResponse> {
   const response = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
+
+  handleUnauthorized(response);
 
   if (response.status === 429) {
     const data = (await response.json()) as RateLimitedResponse;
@@ -45,12 +67,31 @@ async function post<TResponse>(path: string, body: unknown): Promise<TResponse> 
 }
 
 async function get<TResponse>(path: string): Promise<TResponse> {
-  const response = await fetch(`${BASE_URL}${path}`);
+  const response = await fetch(`${BASE_URL}${path}`, { headers: authHeaders() });
+  handleUnauthorized(response);
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error((data as { error?: string }).error ?? `Error ${response.status}`);
   }
   return response.json() as Promise<TResponse>;
+}
+
+/** Valida usuario/contraseña contra el backend (sin Authorization propio: es el paso
+ * que obtiene la credencial, no uno que ya la necesita). No usa `post()` para no
+ * disparar `handleUnauthorized`, que limpiaría un token que ni siquiera existe aún. */
+export async function login(username: string, password: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error ?? "Usuario o contraseña incorrectos");
+  }
+
+  useAuthStore.getState().setToken(encodeCredentials(username, password));
 }
 
 export function search(req: SearchRequest): Promise<SearchResponse> {

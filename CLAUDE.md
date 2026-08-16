@@ -174,6 +174,10 @@ Cada nodo lleva: `id`, `type`, `label`, `raw` (payload original de Croma para el
 CROMA_API_KEY=your_key_here
 PORT=4000
 CACHE_TTL_SECONDS=3600
+
+# Login (ver sección 10) — usuario/contraseña fijos que protegen toda la API
+TRAZO_USERNAME=your_username_here
+TRAZO_PASSWORD=your_password_here
 ```
 
 ---
@@ -227,7 +231,42 @@ Un modo aparte del grafo automático, al estilo Obsidian Canvas: un lienzo libre
 
 ---
 
-## 10. Convenciones de código
+## 10. Autenticación
+
+No hay registro de usuarios ni base de datos de credenciales — es un gate simple de
+usuario/contraseña fijos (`TRAZO_USERNAME`/`TRAZO_PASSWORD` en `backend/.env`), pensado
+para una demo de hackathon detrás de una URL pública, no como sistema de auth real.
+
+- El frontend muestra `LoginScreen` mientras no haya credencial guardada (`authStore`,
+  persistida en `localStorage` bajo la clave `trazo-auth`).
+- Al loguearse, el frontend codifica `usuario:contraseña` en base64 y lo reenvía como
+  header `Authorization: Basic ...` en cada request a la API (`api/client.ts`).
+- El backend valida ese header en `services/auth.ts` (comparación timing-safe) para
+  todas las rutas bajo `/api/*` excepto `/api/health` y `/api/auth/login` — así la API
+  key de Croma y el rate limit compartido quedan protegidos de uso no autorizado.
+- Un 401 en cualquier request limpia la credencial guardada y vuelve a mostrar el login.
+
+No confundir con `identityStore` (`author`, Fase 5): esa es solo una etiqueta de
+atribución dentro de una sala de investigación, no autenticación.
+
+## 11. Despliegue
+
+Trazo se despliega junto al resto de Personal Suite vía Docker Compose, en el
+subdominio `trazo.jesusflorez.cloud`. Ver `deploy/docker-compose.yml` (servicios
+`trazo-backend` y `trazo-frontend`) y `deploy/nginx/conf.d/default.conf`.
+
+- El build context de ambos Dockerfiles es `Trazo/` (no `Trazo/backend/` ni
+  `Trazo/frontend/`), porque tanto el backend como el frontend importan `../shared/`
+  directamente desde TypeScript fuente — necesitan verlo en el contexto de build.
+- `trazo-backend` expone `/api/health` sin auth para el healthcheck de Docker; el resto
+  de `/api/*` exige la credencial (ver sección 10).
+- Las "salas de investigación" (Fase 5, `backend/data/cases/`) se persisten en el
+  volumen Docker `trazo_cases` — sin eso se perderían en cada rebuild del contenedor.
+- El certificado SSL de `jesusflorez.cloud` es uno solo con varios SAN (no wildcard);
+  agregar un subdominio nuevo requiere volver a correr `deploy/init-ssl.sh` para que el
+  subdominio quede incluido en el certificado.
+
+## 12. Convenciones de código
 
 - TypeScript estricto en ambos proyectos (`strict: true`).
 - Componentes de React funcionales, hooks, sin clases.

@@ -6,7 +6,9 @@ import FilterPanel from "./components/FilterPanel";
 import StoryMode from "./components/StoryMode";
 import NotesPanel from "./components/NotesPanel";
 import CaseControls from "./components/CaseControls";
+import LoginScreen from "./components/LoginScreen";
 import { useGraphStore } from "./store/graphStore";
+import { useAuthStore } from "./store/authStore";
 import { readGraphFromLocation } from "./lib/shareGraph";
 import * as api from "./api/client";
 
@@ -55,7 +57,20 @@ function RateLimitBanner() {
   );
 }
 
+function LogoutButton() {
+  const clear = useAuthStore((s) => s.clear);
+  return (
+    <button
+      onClick={clear}
+      className="pointer-events-auto absolute right-4 top-4 z-30 rounded-full border border-white/10 bg-[#131318]/90 px-3 py-1.5 text-xs text-zinc-400 shadow-lg backdrop-blur hover:text-zinc-200"
+    >
+      Salir
+    </button>
+  );
+}
+
 function App() {
+  const token = useAuthStore((s) => s.token);
   const ingest = useGraphStore((s) => s.ingest);
   const hydrateCase = useGraphStore((s) => s.hydrateCase);
   const mergeCaseUpdate = useGraphStore((s) => s.mergeCaseUpdate);
@@ -64,6 +79,7 @@ function App() {
   // Al montar: si la URL trae ?case=<id> (sala de investigación persistida), la carga
   // desde el backend. Si no, cae al link efímero #g=... (compartir sin backend).
   useEffect(() => {
+    if (!token) return;
     const caseParam = new URLSearchParams(window.location.search).get("case");
     if (caseParam) {
       api
@@ -78,11 +94,11 @@ function App() {
     const shared = readGraphFromLocation();
     if (shared) ingest(shared.nodes, shared.edges);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token]);
 
   // Sincronización simple por polling (Fase 5: no WebSockets) mientras haya una sala activa.
   useEffect(() => {
-    if (!caseId) return;
+    if (!token || !caseId) return;
     const interval = setInterval(() => {
       api
         .getCase(caseId)
@@ -90,7 +106,9 @@ function App() {
         .catch(() => {});
     }, CASE_POLL_MS);
     return () => clearInterval(interval);
-  }, [caseId, mergeCaseUpdate]);
+  }, [token, caseId, mergeCaseUpdate]);
+
+  if (!token) return <LoginScreen />;
 
   return (
     <div className="relative h-full w-full">
@@ -100,6 +118,7 @@ function App() {
       <NotesPanel />
       <DiscoveryIndicator />
       <RateLimitBanner />
+      <LogoutButton />
       <StoryMode />
       <CaseControls />
       <NodeDetailPanel />
